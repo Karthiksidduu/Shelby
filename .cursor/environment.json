@@ -1,0 +1,5 @@
+{
+  "name": "Shelby (DAE documents)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh"
+}
