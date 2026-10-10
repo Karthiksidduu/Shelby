@@ -34,6 +34,18 @@ def _reexec(python: Path) -> None:
     os.execv(str(python), [str(python), script, *sys.argv[1:]])
 
 
+def _skip_streamlit_prompts() -> None:
+    """Write Streamlit's first-run files so it does not ask for an email."""
+    folder = Path.home() / ".streamlit"
+    folder.mkdir(parents=True, exist_ok=True)
+    credentials = folder / "credentials.toml"
+    if not credentials.exists():
+        credentials.write_text("[general]\nemail = \"\"\n", encoding="utf-8")
+    config = folder / "config.toml"
+    if not config.exists():
+        config.write_text("[browser]\ngatherUsageStats = false\n", encoding="utf-8")
+
+
 def _print_clicks() -> None:
     """Print the only five clicks needed once the browser opens."""
     print()
@@ -59,8 +71,13 @@ def main() -> None:
 
     if not venv_python.exists():
         print("Creating a virtual environment in .venv ...")
-        subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
-        _reexec(venv_python)
+        try:
+            subprocess.check_call([sys.executable, "-m", "venv", str(ROOT / ".venv")])
+        except subprocess.CalledProcessError:
+            print("Could not create .venv. Using this Python instead.")
+            print("On Ubuntu, install it later with: sudo apt install python3-venv")
+        else:
+            _reexec(venv_python)
 
     try:
         import streamlit  # noqa: F401
@@ -70,6 +87,7 @@ def main() -> None:
             [sys.executable, "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")]
         )
 
+    _skip_streamlit_prompts()
     _print_clicks()
     os.execv(
         sys.executable,
