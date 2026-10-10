@@ -143,6 +143,22 @@ def _inject_styles() -> None:
                 color: #1c1915 !important;
                 font-weight: 700;
             }
+            .stApp .stButton > button {
+                background: #f4efe4 !important;
+                color: #1c1915 !important;
+                border: 1px solid #c4b49a !important;
+            }
+            .stApp .stButton > button p,
+            .stApp .stButton > button span {
+                color: #1c1915 !important;
+            }
+            .stApp textarea,
+            .stApp [data-testid="stTextArea"] textarea,
+            .stApp [data-baseweb="textarea"] {
+                background: #f4efe4 !important;
+                color: #1c1915 !important;
+                -webkit-text-fill-color: #1c1915 !important;
+            }
             .hero {
                 padding: 0.2rem 0 1rem 0;
             }
@@ -400,7 +416,7 @@ def _render_caesar() -> None:
     else:
         ranked, best = None, None
         st.markdown(
-            '<div class="note-card">Press <b>Analyze</b>, or use a gold button in the sidebar.</div>',
+            '<div class="note-card">Press <b>Analyze</b>, or load a sample above.</div>',
             unsafe_allow_html=True,
         )
 
@@ -499,7 +515,7 @@ def _render_substitution() -> None:
     solution = st.session_state.get("substitution_solution")
     if solution is None:
         st.markdown(
-            '<div class="note-card">Press <b>Solve</b>, or use sidebar button 4. A few thousand swaps usually take a few seconds.</div>',
+            '<div class="note-card">Press <b>Solve</b>, or load the lecture sample. A few thousand swaps usually take a few seconds.</div>',
             unsafe_allow_html=True,
         )
     else:
