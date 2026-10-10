@@ -76,6 +76,27 @@ pip install -r requirements.txt
 
 Allowed libraries are listed in `requirements.txt`: Streamlit, Matplotlib, pandas, and pytest. Everything else is the Python standard library.
 
+## Run it in the lecture
+
+From the `cipher-cryptanalysis` folder, one command installs anything missing and opens the app:
+
+```bash
+python run_demo.py
+```
+
+macOS or Linux: `./run_demo.sh`  
+Windows: double-click `run_demo.bat`
+
+Leave that window open. In the browser, click the gold sidebar buttons **in order**. You do not type or paste.
+
+1. **Show the shift** — `HELLO WORLD` with key 3 becomes `KHOOR ZRUOG`.
+2. **Break a paragraph** — a long ciphertext. The best key should be **11**, and the sentence about the lab should come back.
+3. **Short text fails** — the same `KHOOR ZRUOG` sample. A warning appears, and key 3 is usually not rank 1. Say that this is the limitation.
+4. **Crack substitution** — wait a few seconds. The paragraph about secret writing comes back. A few letters such as `v` and `k` may stay swapped.
+5. **Why it fails** — 25 keys versus 26!, then the fingerprint chart and the limitations tab.
+
+Each button also writes the sentence to say in a blue box at the top of the page.
+
 ## Usage
 
 ### Command line
@@ -89,8 +110,10 @@ python -m cryptanalysis.report "KHOOR ZRUOG"
 ### Streamlit
 
 ```bash
-streamlit run app.py
+python run_demo.py
 ```
+
+`streamlit run app.py` still works if the packages are already installed.
 
 Use the sidebar to switch mode:
 
@@ -114,6 +137,9 @@ The script encrypts English windows of length 10, 20, 50, 100, and 200 and print
 ```text
 cipher-cryptanalysis/
 ├── app.py
+├── run_demo.py
+├── run_demo.sh
+├── run_demo.bat
 ├── cryptanalysis/
 │   ├── __init__.py
 │   ├── english_stats.py

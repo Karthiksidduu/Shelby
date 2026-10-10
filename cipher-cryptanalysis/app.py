@@ -25,12 +25,59 @@ from cryptanalysis.frequency import (
     letter_percentages,
     rank_caesar_keys,
 )
-from cryptanalysis.substitution import hill_climb_solve
+from cryptanalysis.substitution import hill_climb_solve, random_key, substitution_encrypt
 
 # Classroom sample used by the brief: "HELLO WORLD" shifted by 3.
 SAMPLE_CIPHERTEXT = "KHOOR ZRUOG"
 SAMPLE_PLAINTEXT = "HELLO WORLD"
 SAMPLE_SHIFT = 3
+
+# A paragraph long enough for chi-squared to recover the shift in one click.
+# The true shift is 11. The lecture buttons never ask you to type this in.
+LECTURE_PARAGRAPH = (
+    "The students gathered in the lab to see why a simple shift cipher fails. "
+    "They typed a long English sentence, hid it with a secret shift, and then "
+    "asked the program to try every possible key. The correct sentence was the "
+    "one whose letters behaved like ordinary English."
+)
+LECTURE_SHIFT = 11
+LECTURE_CAESAR = caesar_encrypt(LECTURE_PARAGRAPH, LECTURE_SHIFT)
+
+# Fixed key (seed 4) so the substitution demo is the same every time you present.
+LECTURE_SUBSTITUTION_PLAIN = (
+    "In the history of secret writing a substitution cipher replaces every letter "
+    "with another letter and then keeps that choice for the whole message. English "
+    "still shows through because the letter e remains common and the pair th keeps "
+    "returning in words such as the that and with. A student can count those letters "
+    "line them up with the usual English order and then swap two guesses whenever "
+    "the text begins to look like real words. With a few hundred letters the pattern "
+    "is strong enough that the original message comes back almost intact which is "
+    "why this classical cipher is no longer a serious way to protect information."
+)
+LECTURE_SUBSTITUTION = substitution_encrypt(LECTURE_SUBSTITUTION_PLAIN, random_key(4))
+
+MODES: list[str] = [
+    "Break Caesar Cipher",
+    "Break Substitution Cipher",
+    "Encrypt Demo",
+    "Why Monoalphabetic Ciphers Fail",
+]
+
+# Spoken cues for the five sidebar buttons, in presentation order.
+LECTURE_CUES: dict[int, str] = {
+    1: "Say: every letter moved forward 3 places, so HELLO became KHOOR. Next I will hide a whole paragraph and not tell the program the key.",
+    2: "Say: this paragraph was shifted by a secret amount. The true shift is 11. If the best key is 11, the attack worked.",
+    3: "Say: the same attack on only ten letters is a guess. The true text is HELLO WORLD, key 3. The warning is the point of this slide.",
+    4: "Say: a full substitution cipher has 26 factorial keys, so we cannot try them all. Frequency analysis plus hill climbing still reads the message. A few letters may stay swapped.",
+    5: "Say: Caesar has 25 keys and still leaks English letter frequencies. AES does not leave this fingerprint.",
+}
+LECTURE_STEP_MODE: dict[int, str] = {
+    1: "Encrypt Demo",
+    2: "Break Caesar Cipher",
+    3: "Break Caesar Cipher",
+    4: "Break Substitution Cipher",
+    5: "Why Monoalphabetic Ciphers Fail",
+}
 
 # Warm paper, ink, and jewel tones. Chosen so a lecture-hall projector
 # still shows strong contrast.
@@ -85,6 +132,17 @@ def _inject_styles() -> None:
                 margin-bottom: 0.4rem;
                 line-height: 1.25;
             }
+            section[data-testid="stSidebar"] .stButton button {
+                width: 100%;
+                border: none;
+                border-radius: 12px;
+                background: #e4c48c;
+                font-weight: 700;
+            }
+            section[data-testid="stSidebar"] .stButton button p {
+                color: #1c1915 !important;
+                font-weight: 700;
+            }
             .hero {
                 padding: 0.2rem 0 1rem 0;
             }
@@ -119,7 +177,25 @@ def _inject_styles() -> None:
             }
             .telegram h3 {
                 font-family: Fraunces, Georgia, serif;
-                margin-top: 0;
+                margin-top: 0.4rem;
+            }
+            .stat-row {
+                display: flex;
+                gap: 1.5rem;
+                margin-bottom: 0.4rem;
+            }
+            .stat-label {
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                font-size: 0.75rem;
+                color: #6b6256;
+                font-weight: 700;
+            }
+            .stat-value {
+                font-family: Fraunces, Georgia, serif;
+                font-size: 1.8rem;
+                color: #1c1915;
+                line-height: 1.1;
             }
             .plain-out {
                 font-family: Fraunces, Georgia, serif;
@@ -172,8 +248,19 @@ def _inject_styles() -> None:
     )
 
 
-def _hero() -> None:
-    """Draw the title block shared by every mode."""
+def _hero(compact: bool = False) -> None:
+    """Draw the title block. A lecture step uses a shorter title so the answer fits."""
+    if compact:
+        st.markdown(
+            """
+            <div class="hero">
+                <div class="eyebrow">Frequency analysis · classical ciphers</div>
+                <h1 style="font-size:1.7rem;">Automated Cryptanalysis of Classical Ciphers</h1>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
     st.markdown(
         """
         <div class="hero">
@@ -260,20 +347,66 @@ def _show_chart(text: str, title: str) -> None:
     plt.close(figure)
 
 
+def _show_caesar_verdict(analyzed: str) -> tuple[list, dict]:
+    """Show the best key and plaintext, and return the ranking for the table."""
+    ranked = rank_caesar_keys(analyzed)
+    best = ranked[0]
+    score = confidence(ranked)
+    if is_text_too_short(analyzed):
+        st.warning(
+            "This ciphertext has fewer than 25 letters. Frequency counts are "
+            "noisy, so the top key may be wrong."
+        )
+    chi_value = best["chi_squared"]
+    chi_label = "n/a" if math.isinf(chi_value) else f"{chi_value:.2f}"
+    safe_plaintext = html.escape(best["plaintext"]) if best["plaintext"] else "—"
+    # Plain HTML, not st.metric: metrics drawn into an earlier container stay blank.
+    st.markdown(
+        f"""
+        <div class="telegram">
+            <div class="stat-row">
+                <div><div class="stat-label">Best key</div><div class="stat-value">{best["key"]}</div></div>
+                <div><div class="stat-label">Confidence</div><div class="stat-value">{score:.1f}%</div></div>
+                <div><div class="stat-label">Chi-squared</div><div class="stat-value">{chi_label}</div></div>
+            </div>
+            <h3>Likely plaintext</h3>
+            <p class="plain-out">{safe_plaintext}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    return ranked, best
+
+
 def _render_caesar() -> None:
     """Break a Caesar cipher: metrics, ranked table, and two frequency charts."""
     st.subheader("Break Caesar Cipher")
-    st.write(
-        "Paste ciphertext. Key k means the letters were shifted forward by k, "
-        "so the attack shifts them back by k and keeps the most English-like result."
-    )
-
-    if st.button("Load sample: KHOOR ZRUOG"):
+    sample_column, paragraph_column = st.columns(2)
+    if sample_column.button("Short sample: KHOOR ZRUOG"):
+        # One click fills the box and ranks the keys, so you are not hunting for Analyze.
         st.session_state["caesar_ciphertext"] = SAMPLE_CIPHERTEXT
+        st.session_state["caesar_analyzed"] = SAMPLE_CIPHERTEXT
+        st.session_state["lecture_step"] = 3
+        st.rerun()
+    if paragraph_column.button("Full paragraph"):
+        st.session_state["caesar_ciphertext"] = LECTURE_CAESAR
+        st.session_state["caesar_analyzed"] = LECTURE_CAESAR
+        st.session_state["lecture_step"] = 2
+        st.rerun()
+
+    analyzed = st.session_state.get("caesar_analyzed")
+    if analyzed:
+        ranked, best = _show_caesar_verdict(analyzed)
+    else:
+        ranked, best = None, None
+        st.markdown(
+            '<div class="note-card">Press <b>Analyze</b>, or use a gold button in the sidebar.</div>',
+            unsafe_allow_html=True,
+        )
 
     ciphertext = st.text_area(
         "Ciphertext",
-        height=140,
+        height=110,
         key="caesar_ciphertext",
         placeholder="Paste ciphertext here, or load the sample.",
     )
@@ -282,47 +415,12 @@ def _render_caesar() -> None:
         # Store the text that was analyzed. Tab clicks rerun the script,
         # and the button itself is True only on the click that produced it.
         st.session_state["caesar_analyzed"] = ciphertext
+        st.rerun()
 
-    verdict_tab, table_tab, chart_tab = st.tabs(
-        ["Verdict", "All 25 keys", "Frequency charts"]
-    )
+    table_tab, chart_tab = st.tabs(["All 25 keys", "Frequency charts"])
 
-    analyzed = st.session_state.get("caesar_analyzed")
-    if analyzed is None:
-        with verdict_tab:
-            st.markdown(
-                '<div class="note-card">Press <b>Analyze</b> to rank every Caesar key.</div>',
-                unsafe_allow_html=True,
-            )
+    if not analyzed or ranked is None or best is None:
         return
-
-    ranked = rank_caesar_keys(analyzed)
-    best = ranked[0]
-    score = confidence(ranked)
-
-    with verdict_tab:
-        if is_text_too_short(analyzed):
-            st.warning(
-                "This ciphertext has fewer than 25 letters. Frequency counts are "
-                "noisy, so the top key may be wrong."
-            )
-        chi_value = best["chi_squared"]
-        chi_label = "n/a" if math.isinf(chi_value) else f"{chi_value:.2f}"
-        left, middle, right = st.columns(3)
-        left.metric("Best key", str(best["key"]))
-        middle.metric("Confidence", f"{score:.1f}%")
-        right.metric("Chi-squared", chi_label)
-        safe_plaintext = html.escape(best["plaintext"]) if best["plaintext"] else "—"
-        st.markdown(
-            f"""
-            <div class="telegram">
-                <h3>Likely plaintext</h3>
-                <p class="plain-out">{safe_plaintext}</p>
-                <p><span class="key-chip">Key {best["key"]}</span></p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
     with table_tab:
         frame = pd.DataFrame(ranked)
@@ -349,6 +447,34 @@ def _render_caesar() -> None:
             _show_chart(best["plaintext"], "Best decryption vs English")
 
 
+def _show_substitution_answer(solution: dict[str, object]) -> None:
+    """Draw the recovered substitution plaintext above the ciphertext box."""
+    ciphertext = str(solution["ciphertext"])
+    plaintext = str(solution["plaintext"])
+    score = float(solution["score"])  # type: ignore[arg-type]
+    if is_text_too_short(ciphertext):
+        st.warning(
+            "This ciphertext has fewer than 25 letters. A substitution solver "
+            "needs a much longer sample before the bigram score is trustworthy."
+        )
+    safe_plaintext = html.escape(plaintext) if plaintext else "—"
+    st.markdown(
+        f"""
+        <div class="telegram">
+            <div class="stat-label">Bigram log-score</div>
+            <div class="stat-value">{score:.1f}</div>
+            <h3>Recovered plaintext</h3>
+            <p class="plain-out">{safe_plaintext}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Higher bigram log-score means more English-like letter pairs. "
+        "The score is negative because it is a sum of logarithms."
+    )
+
+
 def _render_substitution() -> None:
     """Break a general substitution cipher with the hill-climbing solver."""
     st.subheader("Break Substitution Cipher")
@@ -357,11 +483,33 @@ def _render_substitution() -> None:
         "search 26! keys, so the solver starts from letter frequencies and "
         "swaps letters whenever the English bigram score improves."
     )
+    if st.button("Load lecture sample and solve"):
+        st.session_state["substitution_ciphertext"] = LECTURE_SUBSTITUTION
+        st.session_state["lecture_step"] = 4
+        with st.spinner("Climbing the key space..."):
+            key, plaintext, score = hill_climb_solve(LECTURE_SUBSTITUTION, seed=4)
+        st.session_state["substitution_solution"] = {
+            "ciphertext": LECTURE_SUBSTITUTION,
+            "key": key,
+            "plaintext": plaintext,
+            "score": score,
+        }
+        st.rerun()
+
+    solution = st.session_state.get("substitution_solution")
+    if solution is None:
+        st.markdown(
+            '<div class="note-card">Press <b>Solve</b>, or use sidebar button 4. A few thousand swaps usually take a few seconds.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        _show_substitution_answer(solution)
+
     ciphertext = st.text_area(
         "Substitution ciphertext",
         height=160,
         key="substitution_ciphertext",
-        placeholder="Paste a longer English ciphertext (a few hundred letters works best).",
+        placeholder="Paste a longer English ciphertext, or load the lecture sample.",
     )
     if st.button("Solve", type="primary"):
         with st.spinner("Climbing the key space..."):
@@ -372,41 +520,13 @@ def _render_substitution() -> None:
             "plaintext": plaintext,
             "score": score,
         }
+        st.rerun()
 
-    text_tab, map_tab = st.tabs(["Recovered text", "Key mapping"])
-    solution = st.session_state.get("substitution_solution")
     if solution is None:
-        with text_tab:
-            st.markdown(
-                '<div class="note-card">Press <b>Solve</b>. A few thousand swaps usually take a few seconds.</div>',
-                unsafe_allow_html=True,
-            )
         return
 
-    ciphertext = solution["ciphertext"]
     key = solution["key"]
-    plaintext = solution["plaintext"]
-    score = solution["score"]
-
-    with text_tab:
-        if is_text_too_short(ciphertext):
-            st.warning(
-                "This ciphertext has fewer than 25 letters. A substitution solver "
-                "needs a much longer sample before the bigram score is trustworthy."
-            )
-        st.metric("Bigram log-score", f"{score:.1f}")
-        safe_plaintext = html.escape(plaintext) if plaintext else "—"
-        st.markdown(
-            f"""
-            <div class="telegram">
-                <h3>Recovered plaintext</h3>
-                <p class="plain-out">{safe_plaintext}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.caption("Higher bigram log-score means more English-like letter pairs. The score is negative because it is a sum of logarithms.")
-
+    map_tab = st.tabs(["Key mapping"])[0]
     with map_tab:
         st.write("Read each pair as plaintext letter → ciphertext letter.")
         pairs = [
@@ -432,6 +552,8 @@ def _render_encrypt() -> None:
     demo_tab, how_tab = st.tabs(["Live encrypt", "How the shift works"])
 
     with demo_tab:
+        # The ciphertext card is filled after the inputs, but drawn above them.
+        result_slot = st.container()
         if "demo_plaintext" not in st.session_state:
             st.session_state["demo_plaintext"] = ""
         if "demo_shift" not in st.session_state:
@@ -461,18 +583,20 @@ def _render_encrypt() -> None:
         if st.session_state.get("demo_ready") and plaintext:
             produced = caesar_encrypt(plaintext, int(shift))
             safe_ciphertext = html.escape(produced)
-            st.markdown(
-                f"""
-                <div class="telegram">
-                    <h3>Ciphertext</h3>
-                    <p class="plain-out">{safe_ciphertext}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.caption("Key k shifts each letter forward by k. Paste this into Break Caesar Cipher.")
+            with result_slot:
+                st.markdown(
+                    f"""
+                    <div class="telegram">
+                        <h3>Ciphertext</h3>
+                        <p class="plain-out">{safe_ciphertext}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.caption("Key k shifts each letter forward by k.")
         elif st.session_state.get("demo_ready"):
-            st.info("Enter a plaintext sentence, or load the sample that produces KHOOR ZRUOG.")
+            with result_slot:
+                st.info("Enter a plaintext sentence, or load the sample that produces KHOOR ZRUOG.")
 
     with how_tab:
         st.markdown(
@@ -563,6 +687,78 @@ def _render_explanation() -> None:
         )
 
 
+def _start_encrypt_demo() -> None:
+    """Open the encrypt page on HELLO WORLD with shift 3 already applied."""
+    st.session_state["mode"] = "Encrypt Demo"
+    st.session_state["demo_plaintext"] = SAMPLE_PLAINTEXT
+    st.session_state["demo_shift"] = SAMPLE_SHIFT
+    st.session_state["demo_ready"] = True
+    st.session_state["lecture_step"] = 1
+
+
+def _start_long_caesar() -> None:
+    """Open Caesar analysis on the prepared paragraph and show the ranking."""
+    st.session_state["mode"] = "Break Caesar Cipher"
+    st.session_state["caesar_ciphertext"] = LECTURE_CAESAR
+    st.session_state["caesar_analyzed"] = LECTURE_CAESAR
+    st.session_state["lecture_step"] = 2
+
+
+def _start_short_caesar() -> None:
+    """Open Caesar analysis on KHOOR ZRUOG so the short-text warning appears."""
+    st.session_state["mode"] = "Break Caesar Cipher"
+    st.session_state["caesar_ciphertext"] = SAMPLE_CIPHERTEXT
+    st.session_state["caesar_analyzed"] = SAMPLE_CIPHERTEXT
+    st.session_state["lecture_step"] = 3
+
+
+def _start_substitution() -> None:
+    """Solve the prepared substitution ciphertext with the fixed lecture seed."""
+    st.session_state["mode"] = "Break Substitution Cipher"
+    st.session_state["substitution_ciphertext"] = LECTURE_SUBSTITUTION
+    st.session_state["lecture_step"] = 4
+    with st.spinner("Climbing the key space..."):
+        key, plaintext, score = hill_climb_solve(LECTURE_SUBSTITUTION, seed=4)
+    st.session_state["substitution_solution"] = {
+        "ciphertext": LECTURE_SUBSTITUTION,
+        "key": key,
+        "plaintext": plaintext,
+        "score": score,
+    }
+
+
+def _start_explanation() -> None:
+    """Open the explanation page used for the closing minute."""
+    st.session_state["mode"] = "Why Monoalphabetic Ciphers Fail"
+    st.session_state["lecture_step"] = 5
+
+
+def _lecture_sidebar() -> None:
+    """Five buttons, in the order to click them during the presentation."""
+    st.sidebar.markdown("## Present this")
+    st.sidebar.caption("Click in order. Nothing to type or paste.")
+    if st.sidebar.button("1. Show the shift"):
+        _start_encrypt_demo()
+    if st.sidebar.button("2. Break a paragraph"):
+        _start_long_caesar()
+    if st.sidebar.button("3. Short text fails"):
+        _start_short_caesar()
+    if st.sidebar.button("4. Crack substitution"):
+        _start_substitution()
+    if st.sidebar.button("5. Why it fails"):
+        _start_explanation()
+
+
+def _lecture_banner(mode: str) -> None:
+    """Show the line to say for the lecture step that opened this page."""
+    step = st.session_state.get("lecture_step")
+    if not isinstance(step, int):
+        return
+    if LECTURE_STEP_MODE.get(step) != mode:
+        return
+    st.info(LECTURE_CUES[step])
+
+
 def main() -> None:
     """Build the wide Streamlit page and dispatch the selected mode."""
     st.set_page_config(
@@ -571,18 +767,19 @@ def main() -> None:
         layout="wide",
     )
     _inject_styles()
-    _hero()
+    if "mode" not in st.session_state:
+        st.session_state["mode"] = MODES[0]
 
-    st.sidebar.markdown("## Mode")
+    # Lecture buttons update the mode before the radio button is created,
+    # and before the title, so a lecture step can use the shorter header.
+    _lecture_sidebar()
+    _hero(compact=bool(st.session_state.get("lecture_step")))
+    st.sidebar.markdown("## Or pick a page")
     mode = st.sidebar.radio(
         "Mode",
-        [
-            "Break Caesar Cipher",
-            "Break Substitution Cipher",
-            "Encrypt Demo",
-            "Why Monoalphabetic Ciphers Fail",
-        ],
+        MODES,
         label_visibility="collapsed",
+        key="mode",
     )
     st.sidebar.markdown("---")
     st.sidebar.write(
@@ -591,6 +788,7 @@ def main() -> None:
     )
     st.sidebar.caption("College project · Caesar cipher and frequency analysis")
 
+    _lecture_banner(mode)
     if mode == "Break Caesar Cipher":
         _render_caesar()
     elif mode == "Break Substitution Cipher":
