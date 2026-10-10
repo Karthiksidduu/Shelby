@@ -687,68 +687,6 @@ def _render_explanation() -> None:
         )
 
 
-def _start_encrypt_demo() -> None:
-    """Open the encrypt page on HELLO WORLD with shift 3 already applied."""
-    st.session_state["mode"] = "Encrypt Demo"
-    st.session_state["demo_plaintext"] = SAMPLE_PLAINTEXT
-    st.session_state["demo_shift"] = SAMPLE_SHIFT
-    st.session_state["demo_ready"] = True
-    st.session_state["lecture_step"] = 1
-
-
-def _start_long_caesar() -> None:
-    """Open Caesar analysis on the prepared paragraph and show the ranking."""
-    st.session_state["mode"] = "Break Caesar Cipher"
-    st.session_state["caesar_ciphertext"] = LECTURE_CAESAR
-    st.session_state["caesar_analyzed"] = LECTURE_CAESAR
-    st.session_state["lecture_step"] = 2
-
-
-def _start_short_caesar() -> None:
-    """Open Caesar analysis on KHOOR ZRUOG so the short-text warning appears."""
-    st.session_state["mode"] = "Break Caesar Cipher"
-    st.session_state["caesar_ciphertext"] = SAMPLE_CIPHERTEXT
-    st.session_state["caesar_analyzed"] = SAMPLE_CIPHERTEXT
-    st.session_state["lecture_step"] = 3
-
-
-def _start_substitution() -> None:
-    """Solve the prepared substitution ciphertext with the fixed lecture seed."""
-    st.session_state["mode"] = "Break Substitution Cipher"
-    st.session_state["substitution_ciphertext"] = LECTURE_SUBSTITUTION
-    st.session_state["lecture_step"] = 4
-    with st.spinner("Climbing the key space..."):
-        key, plaintext, score = hill_climb_solve(LECTURE_SUBSTITUTION, seed=4)
-    st.session_state["substitution_solution"] = {
-        "ciphertext": LECTURE_SUBSTITUTION,
-        "key": key,
-        "plaintext": plaintext,
-        "score": score,
-    }
-
-
-def _start_explanation() -> None:
-    """Open the explanation page used for the closing minute."""
-    st.session_state["mode"] = "Why Monoalphabetic Ciphers Fail"
-    st.session_state["lecture_step"] = 5
-
-
-def _lecture_sidebar() -> None:
-    """Five buttons, in the order to click them during the presentation."""
-    st.sidebar.markdown("## Present this")
-    st.sidebar.caption("Click in order. Nothing to type or paste.")
-    if st.sidebar.button("1. Show the shift"):
-        _start_encrypt_demo()
-    if st.sidebar.button("2. Break a paragraph"):
-        _start_long_caesar()
-    if st.sidebar.button("3. Short text fails"):
-        _start_short_caesar()
-    if st.sidebar.button("4. Crack substitution"):
-        _start_substitution()
-    if st.sidebar.button("5. Why it fails"):
-        _start_explanation()
-
-
 def _lecture_banner(mode: str) -> None:
     """Show the line to say for the lecture step that opened this page."""
     step = st.session_state.get("lecture_step")
@@ -770,11 +708,8 @@ def main() -> None:
     if "mode" not in st.session_state:
         st.session_state["mode"] = MODES[0]
 
-    # Lecture buttons update the mode before the radio button is created,
-    # and before the title, so a lecture step can use the shorter header.
-    _lecture_sidebar()
     _hero(compact=bool(st.session_state.get("lecture_step")))
-    st.sidebar.markdown("## Or pick a page")
+    st.sidebar.markdown("## Pages")
     mode = st.sidebar.radio(
         "Mode",
         MODES,

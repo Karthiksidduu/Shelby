@@ -49,14 +49,12 @@ def _skip_streamlit_prompts() -> None:
 def _print_clicks() -> None:
     """Print the only five clicks needed once the browser opens."""
     print()
-    print("Lecture demo is starting. When the browser opens, use the left sidebar:")
-    print("  1. Show the shift")
-    print("  2. Break a paragraph")
-    print("  3. Short text fails")
-    print("  4. Crack substitution")
-    print("  5. Why it fails")
+    print("Lecture demo is starting. When the browser opens, use Pages in the left sidebar:")
+    print("  Break Caesar Cipher")
+    print("  Break Substitution Cipher")
+    print("  Encrypt Demo")
+    print("  Why Monoalphabetic Ciphers Fail")
     print()
-    print("You do not need to type or paste anything.")
     print("Leave this window open until the presentation is over.")
     print()
 
