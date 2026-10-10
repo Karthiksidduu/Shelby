@@ -14,15 +14,18 @@ impossible. This module searches instead:
 2. ``hill_climb_solve`` turns that guess into a key, then repeatedly
    swaps two letters in the key. A swap is kept only when the bigram
    log-probability of the decrypted text goes up.
-3. Several restarts begin from a slightly shaken copy of the frequency
-   guess, so one unlucky local peak does not end the search.
+3. Later restarts begin from a fresh random permutation, so one unlucky
+   local peak does not end the search. The first restart still starts
+   from the frequency guess.
 4. A final pass tries every pair of letters and keeps any swap that
    still improves the score. That locks in gains the random swaps missed.
 
-The score is the sum of log probabilities of consecutive letter pairs.
-Common English pairs such as TH and HE raise the score. Pairs that
-almost never occur pull it down. Spaces and punctuation are ignored
-when pairs are counted, so "THE CAT" contributes TH, HE, EC, CA, AT.
+The score is the sum of log probabilities of consecutive letter pairs
+inside each word. Common English pairs such as TH and HE raise the
+score. Pairs that almost never occur pull it down. Spaces break words,
+so "THE CAT" contributes TH, HE, CA, and AT. The pair EC is not counted,
+because those letters were never neighbours in English; only the cipher
+left them on either side of a space.
 """
 
 from __future__ import annotations
@@ -37,30 +40,31 @@ from cryptanalysis.frequency import ALPHABET, letter_counts
 # The exact values are rounded textbook figures. Only the ranking among
 # pairs matters to the hill climber, not the third decimal place.
 BIGRAM_FREQ: dict[str, float] = {
-    "TH": 3.56, "HE": 3.07, "IN": 2.43, "ER": 2.05, "AN": 1.99,
-    "RE": 1.85, "ON": 1.76, "AT": 1.49, "EN": 1.45, "ND": 1.35,
-    "TI": 1.34, "ES": 1.34, "OR": 1.28, "TE": 1.20, "OF": 1.17,
-    "ED": 1.17, "IS": 1.13, "IT": 1.12, "AL": 1.09, "AR": 1.07,
-    "ST": 1.05, "TO": 1.04, "NT": 1.04, "NG": 0.95, "SE": 0.93,
-    "HA": 0.93, "AS": 0.87, "OU": 0.87, "IO": 0.83, "LE": 0.83,
-    "VE": 0.83, "CO": 0.79, "ME": 0.79, "DE": 0.76, "HI": 0.76,
-    "RI": 0.73, "RO": 0.73, "IC": 0.70, "NE": 0.69, "EA": 0.69,
-    "RA": 0.69, "CE": 0.65, "LI": 0.62, "CH": 0.60, "LL": 0.58,
-    "BE": 0.58, "MA": 0.57, "SI": 0.55, "OM": 0.55, "UR": 0.54,
-    "CA": 0.53, "EL": 0.52, "TA": 0.51, "LA": 0.50, "NS": 0.49,
-    "DI": 0.49, "FO": 0.48, "HO": 0.47, "PE": 0.46, "EC": 0.46,
-    "PR": 0.45, "NO": 0.44, "CT": 0.44, "US": 0.43, "AC": 0.43,
-    "OT": 0.43, "IL": 0.42, "TR": 0.42, "LY": 0.42, "NC": 0.41,
-    "ET": 0.40, "UT": 0.40, "SS": 0.40, "SO": 0.39, "RS": 0.39,
-    "UN": 0.38, "LO": 0.38, "WA": 0.37, "GE": 0.37, "IE": 0.36,
-    "WH": 0.36, "EE": 0.35, "WI": 0.35, "EM": 0.34, "AD": 0.34,
-    "OL": 0.33, "RT": 0.33, "PO": 0.32, "WE": 0.32, "AV": 0.31,
-    "AG": 0.31, "VI": 0.30, "OS": 0.30, "CI": 0.29, "DA": 0.28,
+    "TH": 2.71, "HE": 2.33, "IN": 2.03, "ER": 1.78, "AN": 1.61,
+    "RE": 1.41, "ES": 1.32, "ON": 1.32, "ST": 1.25, "NT": 1.17,
+    "EN": 1.13, "AT": 1.12, "ED": 1.08, "ND": 1.07, "TO": 1.07,
+    "OR": 1.06, "EA": 1.00, "TI": 0.99, "AR": 0.98, "TE": 0.98,
+    "NG": 0.89, "AL": 0.88, "IT": 0.88, "AS": 0.87, "IS": 0.86,
+    "HA": 0.83, "ET": 0.76, "SE": 0.73, "OU": 0.72, "OF": 0.71,
+    "LE": 0.69, "SA": 0.67, "VE": 0.66, "RO": 0.64, "RA": 0.64,
+    "RI": 0.63, "HI": 0.62, "NE": 0.59, "ME": 0.57, "DE": 0.55,
+    "CO": 0.55, "IO": 0.54, "IC": 0.53, "EL": 0.52, "LI": 0.51,
+    "LL": 0.50, "CE": 0.49, "TA": 0.48, "MA": 0.47, "SI": 0.46,
+    "OM": 0.45, "UR": 0.44, "CA": 0.43, "LA": 0.42, "NS": 0.41,
+    "DI": 0.40, "FO": 0.39, "HO": 0.38, "PE": 0.37, "EC": 0.36,
+    "PR": 0.35, "NO": 0.34, "CT": 0.33, "US": 0.32, "AC": 0.31,
+    "OT": 0.31, "IL": 0.30, "TR": 0.30, "LY": 0.29, "NC": 0.28,
+    "UT": 0.27, "SS": 0.27, "SO": 0.26, "RS": 0.26, "UN": 0.25,
+    "LO": 0.25, "WA": 0.24, "GE": 0.24, "IE": 0.23, "WH": 0.23,
+    "EE": 0.22, "WI": 0.21, "EM": 0.20, "AD": 0.20, "OL": 0.19,
+    "RT": 0.19, "PO": 0.18, "WE": 0.18, "RD": 0.17, "KE": 0.16,
+    "GH": 0.15, "RY": 0.15, "CH": 0.14, "BE": 0.14, "OW": 0.13,
+    "LD": 0.13,
 }
 
 # Unseen pairs are rare, not impossible. A small floor stops log(0)
 # and still punishes pairs that are missing from the table above.
-_UNSEEN_BIGRAM_FLOOR: float = 0.01
+_UNSEEN_BIGRAM_FLOOR: float = 0.005
 
 
 def _build_log_table() -> dict[str, float]:
@@ -86,9 +90,14 @@ def _build_log_table() -> dict[str, float]:
 _LOG_PROB: dict[str, float] = _build_log_table()
 
 
-def _letters_only(text: str) -> str:
-    """Return the uppercase letters of ``text`` with everything else removed."""
-    return "".join(character.upper() for character in text if character.isalpha())
+def _words(text: str) -> list[str]:
+    """Return the uppercase words in ``text``.
+
+    A word is a run of letters. Spaces and punctuation separate words,
+    so bigrams are not counted across a gap the cipher never mixed.
+    """
+    cleaned = "".join(character.upper() if character.isalpha() else " " for character in text)
+    return [word for word in cleaned.split(" ") if word]
 
 
 def _validate_key(key: str) -> str:
@@ -144,28 +153,26 @@ def random_key(seed: int | None = None) -> str:
 
 
 def bigram_score(text: str) -> float:
-    """Sum of log probabilities of consecutive letter pairs in ``text``.
+    """Sum of log probabilities of consecutive letter pairs inside words.
 
     Higher (closer to zero, since logs of probabilities are negative)
-    means the letter pairs look more like English. Non-letters are
-    skipped before pairs are formed.
+    means the letter pairs look more like English. Pairs are not counted
+    across spaces or punctuation.
     """
-    letters = _letters_only(text)
-    if len(letters) < 2:
-        return 0.0
     total = 0.0
-    for index in range(len(letters) - 1):
-        total += _LOG_PROB[letters[index] + letters[index + 1]]
+    for word in _words(text):
+        for index in range(len(word) - 1):
+            total += _LOG_PROB[word[index] + word[index + 1]]
     return total
 
 
 def _cipher_bigram_counts(ciphertext: str) -> dict[str, int]:
-    """Count consecutive ciphertext letter pairs once, for fast rescoring."""
-    letters = _letters_only(ciphertext)
+    """Count ciphertext letter pairs inside each word, for fast rescoring."""
     counts: dict[str, int] = {}
-    for index in range(len(letters) - 1):
-        pair = letters[index] + letters[index + 1]
-        counts[pair] = counts.get(pair, 0) + 1
+    for word in _words(ciphertext):
+        for index in range(len(word) - 1):
+            pair = word[index] + word[index + 1]
+            counts[pair] = counts.get(pair, 0) + 1
     return counts
 
 
@@ -259,10 +266,11 @@ def hill_climb_solve(
     """Search for the substitution key and return ``(key, plaintext, score)``.
 
     The first restart starts from ``initial_guess``. Each later restart
-    applies a few extra random swaps to that guess, then climbs again.
-    Inside a restart the function proposes ``iterations`` random swaps
-    and keeps a swap only when ``bigram_score`` improves. The best key
-    across restarts is polished and returned.
+    starts from a new random permutation, so the search can leave a
+    valley where the frequency guess got stuck. Inside a restart the
+    function proposes ``iterations`` random swaps and keeps a swap only
+    when the bigram score improves. Each restart then tries every pair
+    of letters and keeps improving swaps. The best key is returned.
 
     ``score`` is the bigram log-probability of the recovered plaintext
     (higher is better). ``seed`` makes the random swaps repeatable.
@@ -280,11 +288,15 @@ def hill_climb_solve(
     best_score = _score_key(best_key, cipher_bigrams)
 
     for restart in range(restarts):
-        current = starting_key
-        # Shake later restarts a little so they can leave a bad peak.
-        for _ in range(restart * 2):
-            left, right = generator.sample(range(26), 2)
-            current = _swap_key(current, left, right)
+        if restart == 0:
+            current = starting_key
+        else:
+            # A fresh permutation, so this restart is not stuck in the same
+            # valley as the frequency guess. The first restart still begins
+            # from that guess, which is the right start when the text is long.
+            letters = list(ALPHABET)
+            generator.shuffle(letters)
+            current = "".join(letters)
         current_score = _score_key(current, cipher_bigrams)
 
         for _ in range(iterations):
@@ -295,11 +307,11 @@ def hill_climb_solve(
                 current = trial
                 current_score = trial_score
 
+        # Full pair check: keep any swap the random phase never proposed.
+        current, current_score = _polish(current, cipher_bigrams)
         if current_score > best_score:
             best_key = current
             best_score = current_score
-
-    best_key, best_score = _polish(best_key, cipher_bigrams)
     plaintext = substitution_decrypt(ciphertext, best_key)
     # Report the public scoring function so the number matches bigram_score.
     return best_key, plaintext, bigram_score(plaintext)

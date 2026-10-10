@@ -38,7 +38,7 @@ A full substitution key is a permutation of the alphabet: 26! possibilities, abo
 1. Maps ciphertext letters, most frequent first, onto English letters in the order E, T, A, O, I, N, …
 2. Repeatedly swaps two letters in the key.
 3. Keeps the swap only when the bigram log-probability improves.
-4. Restarts a few times from a slightly shaken copy of the frequency guess, then checks every remaining pair.
+4. Restarts from new random permutations so one poor peak is not the end of the search, then checks every remaining pair. Pairs are counted inside words, because a space is still visible in the ciphertext.
 
 Unseen letter pairs get a small floor probability so the logarithm is always defined.
 
@@ -133,21 +133,31 @@ cipher-cryptanalysis/
 
 ## Sample output
 
+`python -m cryptanalysis.report "KHOOR ZRUOG"` prints the top three keys with the best one last. Ten letters are not enough for chi-squared to prefer the true shift (key 3, `HELLO WORLD`), which is the short-ciphertext limitation:
+
 ```text
 Ciphertext: KHOOR ZRUOG
 
 Cipher Type: Caesar Cipher
 Possible Keys:
-Key 1 -> JGNNQ YQTNF
-Key 2 -> IFMMP XPSME
-Key 3 -> HELLO WORLD ✓
+Key 3 -> HELLO WORLD
+Key 14 -> WTAAD LDGAS
+Key 6 -> EBIIL TLOIA ✓
 
-Likely Plaintext: HELLO WORLD
-Confidence: …
+Likely Plaintext: EBIIL TLOIA
+Confidence: 3.2%
 Warning: Ciphertext is too short for a reliable result (fewer than 25 letters).
 ```
 
-The three lines under `Possible Keys` are the top three ranked keys, printed so the best key is last and marked with a check. On a 10-letter sample the numeric keys will often differ from 1, 2, and 3, and the warning is expected. A paragraph of 100 or more letters usually places the true shift at rank 1 with a clearer confidence gap.
+A paragraph of 100 or more letters usually places the true shift at rank 1. One run of `experiments/accuracy.py` (30 windows at each length) produced:
+
+```text
+Length  10 letters:  73.3% success
+Length  20 letters:  96.7% success
+Length  50 letters: 100.0% success
+Length 100 letters: 100.0% success
+Length 200 letters: 100.0% success
+```
 
 ## Limitations
 

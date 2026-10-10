@@ -10,6 +10,7 @@ The sidebar chooses the mode. Each mode uses tabs for its sections.
 from __future__ import annotations
 
 import html
+import math
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -62,6 +63,11 @@ def _inject_styles() -> None:
             section[data-testid="stSidebar"] {
                 background: linear-gradient(180deg, #2a241e 0%, #1a1613 100%);
                 border-right: 1px solid rgba(226, 196, 140, 0.25);
+                min-width: 22rem !important;
+                width: 22rem !important;
+            }
+            [data-testid="stToolbar"] {
+                display: none;
             }
             section[data-testid="stSidebar"] h1,
             section[data-testid="stSidebar"] h2,
@@ -75,8 +81,9 @@ def _inject_styles() -> None:
                 background: rgba(255, 250, 243, 0.06);
                 border: 1px solid rgba(226, 196, 140, 0.18);
                 border-radius: 12px;
-                padding: 0.45rem 0.7rem;
-                margin-bottom: 0.35rem;
+                padding: 0.55rem 0.75rem;
+                margin-bottom: 0.4rem;
+                line-height: 1.25;
             }
             .hero {
                 padding: 0.2rem 0 1rem 0;
@@ -120,6 +127,7 @@ def _inject_styles() -> None:
                 line-height: 1.25;
                 color: #1f6f6a;
                 margin: 0.2rem 0 0.8rem 0;
+                overflow-wrap: anywhere;
             }
             .note-card, .explain-card {
                 background: rgba(255, 250, 243, 0.78);
@@ -143,8 +151,8 @@ def _inject_styles() -> None:
             }
             .map-row {
                 font-family: "Source Sans 3", sans-serif;
-                letter-spacing: 0.08em;
-                font-size: 0.95rem;
+                letter-spacing: 0.04em;
+                font-size: 1rem;
                 background: #fffaf3;
                 border-radius: 12px;
                 padding: 0.7rem 0.8rem;
@@ -194,7 +202,6 @@ def _style_charts() -> None:
             "ytick.color": INK,
             "text.color": INK,
             "font.size": 11,
-            "axes.titleweight": "semibold",
         }
     )
 
@@ -249,7 +256,7 @@ def _frequency_chart(text: str, title: str) -> plt.Figure:
 def _show_chart(text: str, title: str) -> None:
     """Render one frequency chart and close the figure so memory stays flat."""
     figure = _frequency_chart(text, title)
-    st.pyplot(figure, use_container_width=True)
+    st.pyplot(figure, width="stretch")
     plt.close(figure)
 
 
@@ -299,10 +306,12 @@ def _render_caesar() -> None:
                 "This ciphertext has fewer than 25 letters. Frequency counts are "
                 "noisy, so the top key may be wrong."
             )
+        chi_value = best["chi_squared"]
+        chi_label = "n/a" if math.isinf(chi_value) else f"{chi_value:.2f}"
         left, middle, right = st.columns(3)
         left.metric("Best key", str(best["key"]))
         middle.metric("Confidence", f"{score:.1f}%")
-        right.metric("Chi-squared", f"{best['chi_squared']:.2f}")
+        right.metric("Chi-squared", chi_label)
         safe_plaintext = html.escape(best["plaintext"]) if best["plaintext"] else "—"
         st.markdown(
             f"""
@@ -328,7 +337,7 @@ def _render_caesar() -> None:
         )
         frame["Chi-squared"] = frame["Chi-squared"].map(lambda value: round(float(value), 3))
         frame["Word score"] = frame["Word score"].map(lambda value: round(float(value), 3))
-        st.dataframe(frame, use_container_width=True, hide_index=True)
+        st.dataframe(frame, width="stretch", hide_index=True)
         st.caption("Rank 1 is the lowest chi-squared score. The word score breaks ties.")
 
     with chart_tab:
@@ -400,13 +409,15 @@ def _render_substitution() -> None:
 
     with map_tab:
         st.write("Read each pair as plaintext letter → ciphertext letter.")
-        pairs = [f"{ALPHABET[index]}→{key[index]}" for index in range(26)]
+        pairs = [
+            f"<b>{ALPHABET[index]}</b>→{key[index]}" for index in range(26)
+        ]
         st.markdown(
-            f'<div class="map-row">{"  ".join(pairs[:13])}</div>',
+            f'<div class="map-row">{"&nbsp;&nbsp;".join(pairs[:13])}</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
-            f'<div class="map-row">{"  ".join(pairs[13:])}</div>',
+            f'<div class="map-row">{"&nbsp;&nbsp;".join(pairs[13:])}</div>',
             unsafe_allow_html=True,
         )
         st.code(key, language=None)
@@ -447,8 +458,8 @@ def _render_encrypt() -> None:
         if st.button("Encrypt", type="primary"):
             st.session_state["demo_ready"] = True
 
-        if st.session_state.get("demo_ready"):
-            produced = caesar_encrypt(plaintext, int(shift)) if plaintext else SAMPLE_CIPHERTEXT
+        if st.session_state.get("demo_ready") and plaintext:
+            produced = caesar_encrypt(plaintext, int(shift))
             safe_ciphertext = html.escape(produced)
             st.markdown(
                 f"""
@@ -460,6 +471,8 @@ def _render_encrypt() -> None:
                 unsafe_allow_html=True,
             )
             st.caption("Key k shifts each letter forward by k. Paste this into Break Caesar Cipher.")
+        elif st.session_state.get("demo_ready"):
+            st.info("Enter a plaintext sentence, or load the sample that produces KHOOR ZRUOG.")
 
     with how_tab:
         st.markdown(
