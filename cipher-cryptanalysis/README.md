@@ -1,5 +1,9 @@
 # Automated Cryptanalysis of Classical Substitution Ciphers (Caesar Cipher) Using Frequency Analysis
 
+**[Open the app in one click](https://cdn.jsdelivr.net/gh/Karthiksidduu/Shelby@cursor/cipher-cryptanalysis-6509/cipher-cryptanalysis/open.html)**
+
+That link runs this project in the browser. Nothing to install. The first visit takes about a minute while Python downloads, then click the gold buttons on the left.
+
 A Python program that receives ciphertext and recovers the plaintext **without the key**. It shows why a monoalphabetic cipher is weak: it hides the names of the letters, but not how often they appear.
 
 ## Objective

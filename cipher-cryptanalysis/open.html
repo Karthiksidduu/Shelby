@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Automated Cryptanalysis of Classical Ciphers</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.css"
+    />
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.js"
+    ></script>
+    <style>
+      html,
+      body,
+      streamlit-app {
+        margin: 0;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <streamlit-app>
+      <app-file name="app.py" entrypoint url="./app.py"></app-file>
+      <app-file name="cryptanalysis/__init__.py" url="./cryptanalysis/__init__.py"></app-file>
+      <app-file name="cryptanalysis/caesar.py" url="./cryptanalysis/caesar.py"></app-file>
+      <app-file name="cryptanalysis/english_stats.py" url="./cryptanalysis/english_stats.py"></app-file>
+      <app-file name="cryptanalysis/frequency.py" url="./cryptanalysis/frequency.py"></app-file>
+      <app-file name="cryptanalysis/report.py" url="./cryptanalysis/report.py"></app-file>
+      <app-file name="cryptanalysis/substitution.py" url="./cryptanalysis/substitution.py"></app-file>
+      <app-requirements>
+matplotlib
+pandas
+      </app-requirements>
+    </streamlit-app>
+  </body>
+</html>
